@@ -106,6 +106,31 @@ int main(void)
   /* USER CODE BEGIN 2 */
   HAL_TIM_Base_Start_IT(&htim2);
 
+  // Check user button press. If pressed, RTC clock is reseted to the subsequent
+  // date and time.
+  if(HAL_GPIO_ReadPin(B1_GPIO_Port, B1_Pin) == GPIO_PIN_RESET){
+	  // Specified values are in BCD format.
+	  sTime.Hours = 0x13;
+	  sTime.Minutes = 0x56;
+	  sTime.Seconds = 0x00;
+	  sTime.SecondFraction = 0x00;
+	  sTime.DayLightSaving = RTC_DAYLIGHTSAVING_NONE;
+	  sTime.StoreOperation = RTC_STOREOPERATION_RESET;
+	  if (HAL_RTC_SetTime(&hrtc, &sTime, RTC_FORMAT_BCD) != HAL_OK)
+	  {
+	    Error_Handler();
+	  }
+	  sDate.WeekDay = RTC_WEEKDAY_TUESDAY;
+	  sDate.Month = RTC_MONTH_NOVEMBER;
+	  sDate.Date = 0x30;
+	  sDate.Year = 0x21;
+
+	  if (HAL_RTC_SetDate(&hrtc, &sDate, RTC_FORMAT_BCD) != HAL_OK)
+	  {
+	    Error_Handler();
+	  }
+  }
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -207,25 +232,7 @@ static void MX_RTC_Init(void)
     Error_Handler();
   }
   /* USER CODE BEGIN RTC_Init 2 */
-  sTime.Hours = 0x10;
-  sTime.Minutes = 0x20;
-  sTime.Seconds = 0x30;
-  sTime.SecondFraction = 0x00;
-  sTime.DayLightSaving = RTC_DAYLIGHTSAVING_NONE;
-  sTime.StoreOperation = RTC_STOREOPERATION_RESET;
-  if (HAL_RTC_SetTime(&hrtc, &sTime, RTC_FORMAT_BCD) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  sDate.WeekDay = RTC_WEEKDAY_TUESDAY;
-  sDate.Month = RTC_MONTH_NOVEMBER;
-  sDate.Date = 0x30;
-  sDate.Year = 0x21;
 
-  if (HAL_RTC_SetDate(&hrtc, &sDate, RTC_FORMAT_BCD) != HAL_OK)
-  {
-    Error_Handler();
-  }
   /* USER CODE END RTC_Init 2 */
 
 }

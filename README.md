@@ -9,7 +9,7 @@ This project is based on a [STM32 Nucleo F401RE](https://www.st.com/en/evaluatio
 
 A Timer is configured to generate a 1PPS or 30PPS pulse in Pin XXX. In addition, at every second, a NMEA string is formatted with the date and time and sent to USART, effectively emulating a GPS module.
 
-Thu microcontroler is configured to use the RTC clock to count and store the time and date. Thus, the use of a 3V battery connected to VBAT pin is recommended to keep track of the time when the device is turned off.
+The microcontroler is configured to use the RTC clock to count and store the time and date. Thus, the use of a 3V battery connected to VBAT pin is recommended to keep track of the time when the device is turned off.
 
 ## Limitations
 
