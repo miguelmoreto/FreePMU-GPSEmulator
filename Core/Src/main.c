@@ -51,6 +51,7 @@ UART_HandleTypeDef huart1;
 uint8_t flagTIM2 = 0;
 char time[30];
 char date[30];
+char gps_string[100];
 int tempcounter = 0;
 RTC_TimeTypeDef sTime;
 RTC_DateTypeDef sDate;
@@ -141,13 +142,16 @@ int main(void)
 		  HAL_RTC_GetTime(&hrtc, &sTime, RTC_FORMAT_BIN);
 		  HAL_RTC_GetDate(&hrtc, &sDate, RTC_FORMAT_BIN);
 
+		  //"GPRMC,190430,A,4812.3038,S,07330.7690,W,3.7,3.8,090210,13.7,E,D*26\n";
 		  sprintf(date,"Date: %02d.%02d.%02d\t",sDate.Date,sDate.Month,sDate.Year);
 		  sprintf(time,"Time: %02d.%02d.%02d\r\n",sTime.Hours,sTime.Minutes,sTime.Seconds);
+		  sprintf(gps_string,"$GPRMC,%02d%02d%02d,A,2730.00,S,048300.00,W,0.0,0.0,%02d%02d%02d,20.3,E*26\r\n",sTime.Hours,sTime.Minutes,sTime.Seconds,sDate.Date,sDate.Month,sDate.Year);
 
 		  //sprintf(date,"Date: %02d.%02d.%02d\t",sDate.Date,sDate.Month,sDate.Year);
 		  //sprintf(date,"Counter: %02d\r\n",tempcounter);
-		  HAL_UART_Transmit(&huart1, &date, sizeof(date),1000);
-		  HAL_UART_Transmit(&huart1, &time, sizeof(date),1000);
+		  //HAL_UART_Transmit(&huart1, &date, sizeof(date),1000);
+		  //HAL_UART_Transmit(&huart1, &time, sizeof(date),1000);
+		  HAL_UART_Transmit(&huart1, &gps_string, sizeof(gps_string),1000);
 		  tempcounter++;
 		  flagTIM2 = 0;
 	  }
