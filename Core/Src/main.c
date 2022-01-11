@@ -45,6 +45,8 @@ RTC_HandleTypeDef hrtc;
 TIM_HandleTypeDef htim2;
 
 UART_HandleTypeDef huart1;
+UART_HandleTypeDef huart6;
+DMA_HandleTypeDef hdma_usart6_rx;
 
 /* USER CODE BEGIN PV */
 
@@ -53,9 +55,23 @@ char time[30];
 char date[30];
 char gps_string[100];
 int tempcounter = 0;
+int pps_counter = 0;
 RTC_TimeTypeDef sTime;
+RTC_TimeTypeDef rxTime;
 RTC_DateTypeDef sDate;
+RTC_DateTypeDef rxDate;
+uint8_t UART6_rxCommand[1] = {0};
+uint8_t UART6_rxBuffer[17] = {0}; // Buffer where DMA will store the received date and time from serial.
+uint8_t UART6_rxFlag = 0;
+uint8_t rxDateTimeFlag = 0;
 
+// Serial terminal messages:
+const char welcome_msg[] = "\r\nFreePMU GPS emulator version 1.\r\n";
+const char reset_dt_msg[] = "\r\nDate and time reset to 2022-01-01 12:00\r\n";
+const char help_msg[] = "\r\nThis is the help message.\r\n";
+const char prompt1_msg[] = "\r\nEnter the date and time string (enable echo in your terminal).\r\nFomart: hh,mm,ss,DD,MM,YY\r\n=> ";
+const char prompt2_msg[] = "\r\nString received: ";
+const char prompt3_msg[] = "\r\nDate and time set to:\r\n";
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -64,6 +80,8 @@ static void MX_GPIO_Init(void);
 static void MX_RTC_Init(void);
 static void MX_TIM2_Init(void);
 static void MX_USART1_UART_Init(void);
+static void MX_DMA_Init(void);
+static void MX_USART6_UART_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -104,15 +122,19 @@ int main(void)
   MX_RTC_Init();
   MX_TIM2_Init();
   MX_USART1_UART_Init();
+  MX_DMA_Init();
+  MX_USART6_UART_Init();
   /* USER CODE BEGIN 2 */
   HAL_TIM_Base_Start_IT(&htim2);
+  HAL_UART_Transmit(&huart6, (uint8_t*)welcome_msg,sizeof(welcome_msg),1000);
+  HAL_UART_Receive_DMA(&huart6, UART6_rxCommand, sizeof(UART6_rxCommand));
 
   // Check user button press. If pressed, RTC clock is reseted to the subsequent
   // date and time.
   if(HAL_GPIO_ReadPin(B1_GPIO_Port, B1_Pin) == GPIO_PIN_RESET){
 	  // Specified values are in BCD format.
-	  sTime.Hours = 0x13;
-	  sTime.Minutes = 0x56;
+	  sTime.Hours = 0x12;
+	  sTime.Minutes = 0x00;
 	  sTime.Seconds = 0x00;
 	  sTime.SecondFraction = 0x00;
 	  sTime.DayLightSaving = RTC_DAYLIGHTSAVING_NONE;
@@ -121,15 +143,16 @@ int main(void)
 	  {
 	    Error_Handler();
 	  }
-	  sDate.WeekDay = RTC_WEEKDAY_TUESDAY;
-	  sDate.Month = RTC_MONTH_NOVEMBER;
-	  sDate.Date = 0x30;
-	  sDate.Year = 0x21;
+	  sDate.WeekDay = RTC_WEEKDAY_SATURDAY;
+	  sDate.Month = RTC_MONTH_JANUARY;
+	  sDate.Date = 0x01;
+	  sDate.Year = 0x22;
 
 	  if (HAL_RTC_SetDate(&hrtc, &sDate, RTC_FORMAT_BCD) != HAL_OK)
 	  {
 	    Error_Handler();
 	  }
+	  HAL_UART_Transmit(&huart6, (uint8_t*)reset_dt_msg, sizeof(reset_dt_msg), 1000);
   }
 
   /* USER CODE END 2 */
@@ -138,7 +161,7 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-	  if (flagTIM2 == 1){
+	  if (pps_counter > 29){
 		  HAL_RTC_GetTime(&hrtc, &sTime, RTC_FORMAT_BIN);
 		  HAL_RTC_GetDate(&hrtc, &sDate, RTC_FORMAT_BIN);
 
@@ -151,9 +174,48 @@ int main(void)
 		  //sprintf(date,"Counter: %02d\r\n",tempcounter);
 		  //HAL_UART_Transmit(&huart1, &date, sizeof(date),1000);
 		  //HAL_UART_Transmit(&huart1, &time, sizeof(date),1000);
-		  HAL_UART_Transmit(&huart1, &gps_string, sizeof(gps_string),1000);
+		  HAL_UART_Transmit(&huart1, (uint8_t*)gps_string, sizeof(gps_string),1000);
 		  tempcounter++;
+		  pps_counter = 0;
 		  flagTIM2 = 0;
+	  }
+
+	  if(UART6_rxFlag){
+		  if (*UART6_rxCommand == 'h'){
+			  HAL_UART_Transmit(&huart6, (uint8_t*)help_msg, sizeof(help_msg), 1000);
+			  HAL_UART_Receive_DMA(&huart6, UART6_rxCommand, sizeof(UART6_rxCommand)); // Enable reception of a command
+		  }
+		  else if(*UART6_rxCommand == 'p'){
+			  HAL_UART_Transmit(&huart6, (uint8_t*)gps_string, sizeof(gps_string),1000);
+			  HAL_UART_Receive_DMA(&huart6, UART6_rxCommand, sizeof(UART6_rxCommand)); // Enable reception of a command
+		  }
+		  else if(*UART6_rxCommand == 'P'){
+			  HAL_UART_Transmit(&huart6, (uint8_t*)date, sizeof(date),1000);
+			  HAL_UART_Transmit(&huart6, (uint8_t*)time, sizeof(time),1000);
+			  HAL_UART_Receive_DMA(&huart6, UART6_rxCommand, sizeof(UART6_rxCommand)); // Enable reception of a command
+		  }
+		  else if(*UART6_rxCommand == 's'){
+			  if (rxDateTimeFlag){ // Decode buffer
+				  //HAL_UART_Transmit(&huart6, (uint8_t*)prompt2_msg, sizeof(prompt2_msg), 1000);
+				  sscanf((char *)UART6_rxBuffer,"%02d,%02d,%02d,%02d,%02d,%02d",(int *)&rxTime.Hours,(int *)&rxTime.Minutes,(int *)&rxTime.Seconds,(int *)&rxDate.Date,(int *)&rxDate.Month,(int *)&rxDate.Year);
+				  sprintf(date,"Date: %02d.%02d.%02d\t",rxDate.Date,rxDate.Month,rxDate.Year);
+				  sprintf(time,"Time: %02d.%02d.%02d\r\n",rxTime.Hours,rxTime.Minutes,rxTime.Seconds);
+				  //HAL_UART_Transmit(&huart6, (uint8_t*)UART6_rxBuffer, sizeof(UART6_rxBuffer), 1000);
+				  HAL_UART_Transmit(&huart6, (uint8_t*)prompt3_msg, sizeof(prompt3_msg), 1000);
+				  HAL_UART_Transmit(&huart6, (uint8_t*)date, sizeof(date),1000);
+				  HAL_UART_Transmit(&huart6, (uint8_t*)time, sizeof(time),1000);
+				  rxDateTimeFlag = 0;
+				  HAL_UART_Receive_DMA(&huart6, UART6_rxCommand, sizeof(UART6_rxCommand)); // Enable reception of a command
+			  }else{ // Prompt for setting:
+				  HAL_UART_Transmit(&huart6, (uint8_t*)prompt1_msg, sizeof(prompt1_msg), 1000);
+				  HAL_UART_Receive_DMA(&huart6, UART6_rxBuffer, sizeof(UART6_rxBuffer)); // Enable reception of the buffer.
+				  rxDateTimeFlag = 1; // flag for the next time the interrupt is triggered  (buffer full).
+			  }
+		  }
+		  //HAL_UART_Transmit(&huart6, &UART6_rxCommand, sizeof(UART6_rxCommand), 1000);
+		  // Reset flag:
+		  UART6_rxFlag = 0;
+
 	  }
     /* USER CODE END WHILE */
 
@@ -255,6 +317,7 @@ static void MX_TIM2_Init(void)
 
   TIM_ClockConfigTypeDef sClockSourceConfig = {0};
   TIM_MasterConfigTypeDef sMasterConfig = {0};
+  TIM_OC_InitTypeDef sConfigOC = {0};
 
   /* USER CODE BEGIN TIM2_Init 1 */
 
@@ -262,7 +325,7 @@ static void MX_TIM2_Init(void)
   htim2.Instance = TIM2;
   htim2.Init.Prescaler = 0;
   htim2.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim2.Init.Period = 83999999;
+  htim2.Init.Period = 2799999;
   htim2.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim2.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
   if (HAL_TIM_Base_Init(&htim2) != HAL_OK)
@@ -274,15 +337,28 @@ static void MX_TIM2_Init(void)
   {
     Error_Handler();
   }
+  if (HAL_TIM_PWM_Init(&htim2) != HAL_OK)
+  {
+    Error_Handler();
+  }
   sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
   sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
   if (HAL_TIMEx_MasterConfigSynchronization(&htim2, &sMasterConfig) != HAL_OK)
   {
     Error_Handler();
   }
+  sConfigOC.OCMode = TIM_OCMODE_PWM1;
+  sConfigOC.Pulse = 279999;
+  sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
+  sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
+  if (HAL_TIM_PWM_ConfigChannel(&htim2, &sConfigOC, TIM_CHANNEL_1) != HAL_OK)
+  {
+    Error_Handler();
+  }
   /* USER CODE BEGIN TIM2_Init 2 */
 
   /* USER CODE END TIM2_Init 2 */
+  HAL_TIM_MspPostInit(&htim2);
 
 }
 
@@ -320,6 +396,55 @@ static void MX_USART1_UART_Init(void)
 }
 
 /**
+  * @brief USART6 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_USART6_UART_Init(void)
+{
+
+  /* USER CODE BEGIN USART6_Init 0 */
+
+  /* USER CODE END USART6_Init 0 */
+
+  /* USER CODE BEGIN USART6_Init 1 */
+
+  /* USER CODE END USART6_Init 1 */
+  huart6.Instance = USART6;
+  huart6.Init.BaudRate = 115200;
+  huart6.Init.WordLength = UART_WORDLENGTH_8B;
+  huart6.Init.StopBits = UART_STOPBITS_1;
+  huart6.Init.Parity = UART_PARITY_NONE;
+  huart6.Init.Mode = UART_MODE_TX_RX;
+  huart6.Init.HwFlowCtl = UART_HWCONTROL_NONE;
+  huart6.Init.OverSampling = UART_OVERSAMPLING_16;
+  if (HAL_UART_Init(&huart6) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN USART6_Init 2 */
+
+  /* USER CODE END USART6_Init 2 */
+
+}
+
+/**
+  * Enable DMA controller clock
+  */
+static void MX_DMA_Init(void)
+{
+
+  /* DMA controller clock enable */
+  __HAL_RCC_DMA2_CLK_ENABLE();
+
+  /* DMA interrupt init */
+  /* DMA2_Stream1_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(DMA2_Stream1_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(DMA2_Stream1_IRQn);
+
+}
+
+/**
   * @brief GPIO Initialization Function
   * @param None
   * @retval None
@@ -343,14 +468,6 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(B1_GPIO_Port, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : USART_TX_Pin USART_RX_Pin */
-  GPIO_InitStruct.Pin = USART_TX_Pin|USART_RX_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  GPIO_InitStruct.Alternate = GPIO_AF7_USART2;
-  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
-
   /*Configure GPIO pin : LD2_Pin */
   GPIO_InitStruct.Pin = LD2_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
@@ -368,7 +485,18 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
 	// Check which version of the timer triggered this callback and toggle LED
 	if (htim == &htim2 ){
 		HAL_GPIO_TogglePin(LD2_GPIO_Port, LD2_Pin);
-		flagTIM2 = 1;
+		//flagTIM2 = 1;
+		pps_counter++;
+	}
+
+}
+
+// Callback of the UART interrupt
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart){
+
+	if(huart == &huart6){
+		UART6_rxFlag = 1;
+		//HAL_UART_Receive_DMA(&huart6, UART6_rxCommand, 2);
 	}
 
 }
