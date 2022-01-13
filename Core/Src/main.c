@@ -68,10 +68,11 @@ uint8_t rxDateTimeFlag = 0;
 // Serial terminal messages:
 const char welcome_msg[] = "\r\nFreePMU GPS emulator version 1.\r\n";
 const char reset_dt_msg[] = "\r\nDate and time reset to 2022-01-01 12:00\r\n";
-const char help_msg[] = "\r\nThis is the help message.\r\n";
+const char help_msg[] = "\r\nThis is the help message.\r\n\r\n\t h: Show this help message.\r\n\t p: Print the last send NMEA message.\r\n\t P: Print formatted date and time.\r\n\t s: Set the time and date.\r\n";
 const char prompt1_msg[] = "\r\nEnter the date and time string (enable echo in your terminal).\r\nFomart: hh,mm,ss,DD,MM,YY\r\n=> ";
 const char prompt2_msg[] = "\r\nString received: ";
 const char prompt3_msg[] = "\r\nDate and time set to:\r\n";
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -99,6 +100,7 @@ int main(void)
 {
   /* USER CODE BEGIN 1 */
 
+
   /* USER CODE END 1 */
 
   /* MCU Configuration--------------------------------------------------------*/
@@ -107,7 +109,7 @@ int main(void)
   HAL_Init();
 
   /* USER CODE BEGIN Init */
-
+  uint8_t a;
   /* USER CODE END Init */
 
   /* Configure the system clock */
@@ -170,10 +172,6 @@ int main(void)
 		  sprintf(time,"Time: %02d.%02d.%02d\r\n",sTime.Hours,sTime.Minutes,sTime.Seconds);
 		  sprintf(gps_string,"$GPRMC,%02d%02d%02d,A,2730.00,S,048300.00,W,0.0,0.0,%02d%02d%02d,20.3,E*26\r\n",sTime.Hours,sTime.Minutes,sTime.Seconds,sDate.Date,sDate.Month,sDate.Year);
 
-		  //sprintf(date,"Date: %02d.%02d.%02d\t",sDate.Date,sDate.Month,sDate.Year);
-		  //sprintf(date,"Counter: %02d\r\n",tempcounter);
-		  //HAL_UART_Transmit(&huart1, &date, sizeof(date),1000);
-		  //HAL_UART_Transmit(&huart1, &time, sizeof(date),1000);
 		  HAL_UART_Transmit(&huart1, (uint8_t*)gps_string, sizeof(gps_string),1000);
 		  tempcounter++;
 		  pps_counter = 0;
@@ -186,10 +184,12 @@ int main(void)
 			  HAL_UART_Receive_DMA(&huart6, UART6_rxCommand, sizeof(UART6_rxCommand)); // Enable reception of a command
 		  }
 		  else if(*UART6_rxCommand == 'p'){
+			  HAL_UART_Transmit(&huart6, (uint8_t*)"\r\n", 2,1000);
 			  HAL_UART_Transmit(&huart6, (uint8_t*)gps_string, sizeof(gps_string),1000);
 			  HAL_UART_Receive_DMA(&huart6, UART6_rxCommand, sizeof(UART6_rxCommand)); // Enable reception of a command
 		  }
 		  else if(*UART6_rxCommand == 'P'){
+			  HAL_UART_Transmit(&huart6, (uint8_t*)"\r\n", 2,1000);
 			  HAL_UART_Transmit(&huart6, (uint8_t*)date, sizeof(date),1000);
 			  HAL_UART_Transmit(&huart6, (uint8_t*)time, sizeof(time),1000);
 			  HAL_UART_Receive_DMA(&huart6, UART6_rxCommand, sizeof(UART6_rxCommand)); // Enable reception of a command
@@ -197,10 +197,10 @@ int main(void)
 		  else if(*UART6_rxCommand == 's'){
 			  if (rxDateTimeFlag){ // Decode buffer
 				  //HAL_UART_Transmit(&huart6, (uint8_t*)prompt2_msg, sizeof(prompt2_msg), 1000);
-				  sscanf((char *)UART6_rxBuffer,"%02d,%02d,%02d,%02d,%02d,%02d",(int *)&rxTime.Hours,(int *)&rxTime.Minutes,(int *)&rxTime.Seconds,(int *)&rxDate.Date,(int *)&rxDate.Month,(int *)&rxDate.Year);
-				  sprintf(date,"Date: %02d.%02d.%02d\t",rxDate.Date,rxDate.Month,rxDate.Year);
+				  sscanf((char *)UART6_rxBuffer,"%02d,%02d,%02d,%02d,%02d,%02d",(int *)&rxTime.Hours,(int *)&rxTime.Minutes,(int *)&rxTime.Seconds,(int *)&a,(int *)&rxDate.Month,(int *)&rxDate.Year);
+				  rxDate.Date = a; // Due to sscanf bizarre behavior.
+				  sprintf(date,"\r\nDate: %02d.%02d.%02d\t",rxDate.Date,rxDate.Month,rxDate.Year);
 				  sprintf(time,"Time: %02d.%02d.%02d\r\n",rxTime.Hours,rxTime.Minutes,rxTime.Seconds);
-				  //HAL_UART_Transmit(&huart6, (uint8_t*)UART6_rxBuffer, sizeof(UART6_rxBuffer), 1000);
 				  HAL_UART_Transmit(&huart6, (uint8_t*)prompt3_msg, sizeof(prompt3_msg), 1000);
 				  HAL_UART_Transmit(&huart6, (uint8_t*)date, sizeof(date),1000);
 				  HAL_UART_Transmit(&huart6, (uint8_t*)time, sizeof(time),1000);
@@ -212,7 +212,6 @@ int main(void)
 				  rxDateTimeFlag = 1; // flag for the next time the interrupt is triggered  (buffer full).
 			  }
 		  }
-		  //HAL_UART_Transmit(&huart6, &UART6_rxCommand, sizeof(UART6_rxCommand), 1000);
 		  // Reset flag:
 		  UART6_rxFlag = 0;
 
