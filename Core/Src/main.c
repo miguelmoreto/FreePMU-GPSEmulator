@@ -128,6 +128,7 @@ int main(void)
   MX_USART6_UART_Init();
   /* USER CODE BEGIN 2 */
   HAL_TIM_Base_Start_IT(&htim2);
+  HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_1);
   HAL_UART_Transmit(&huart6, (uint8_t*)welcome_msg,sizeof(welcome_msg),1000);
   HAL_UART_Receive_DMA(&huart6, UART6_rxCommand, sizeof(UART6_rxCommand));
 
@@ -355,6 +356,7 @@ static void MX_TIM2_Init(void)
     Error_Handler();
   }
   /* USER CODE BEGIN TIM2_Init 2 */
+
 
   /* USER CODE END TIM2_Init 2 */
   HAL_TIM_MspPostInit(&htim2);

@@ -23,6 +23,14 @@ This device is for testing purposes only. It does not substitute a proper GPS mo
 * USART6: used for setting/update the date and time and other control functions. Configured as 115200 bps, 8bits, no parity and 1 stop bit.
 * TIM2: 32bits timer used for generating the PPS signal. Configured in PWM Output Compare mode, 10% duty cycle. The timer clock is 84MHz -> time resolution 12 ns.
 
+## Pins used
+
+* PA0: Emulated PPS.
+* PA9: USART1 TX (GPS TX)
+* PA10 USART1 RX (GPS RX)
+* PA11: USART6 TX (serial terminal).
+* PA12: USART6 RX (serial terminal).
+
 ## Serial commands
 
 | Command | Description |
