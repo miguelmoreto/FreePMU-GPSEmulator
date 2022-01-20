@@ -69,7 +69,7 @@ uint8_t rxDateTimeFlag = 0;
 const char welcome_msg[] = "\r\nFreePMU GPS emulator version 1.\r\n";
 const char reset_dt_msg[] = "\r\nDate and time reset to 2022-01-01 12:00\r\n";
 const char help_msg[] = "\r\nThis is the help message.\r\n\r\n\t h: Show this help message.\r\n\t p: Print the last send NMEA message.\r\n\t P: Print formatted date and time.\r\n\t s: Set the time and date.\r\n";
-const char prompt1_msg[] = "\r\nEnter the date and time string (enable echo in your terminal).\r\nFomart: hh,mm,ss,DD,MM,YY\r\n=> ";
+const char prompt1_msg[] = "\r\nEnter the date and time string (enable echo in your terminal):\r\nFomart: hh,mm,ss,DD,MM,YY\r\n=> ";
 const char prompt2_msg[] = "\r\nString received: ";
 const char prompt3_msg[] = "\r\nDate and time set to:\r\n";
 
@@ -179,7 +179,7 @@ int main(void)
 		  pps_counter = 0;
 		  flagTIM2 = 0;
 	  }
-
+	  // Perform actions accordingly with the received command character:
 	  if(UART6_rxFlag){
 		  if (*UART6_rxCommand == 'h'){
 			  HAL_UART_Transmit(&huart6, (uint8_t*)help_msg, sizeof(help_msg), 1000);
@@ -206,6 +206,9 @@ int main(void)
 				  HAL_UART_Transmit(&huart6, (uint8_t*)prompt3_msg, sizeof(prompt3_msg), 1000);
 				  HAL_UART_Transmit(&huart6, (uint8_t*)date, sizeof(date),1000);
 				  HAL_UART_Transmit(&huart6, (uint8_t*)time, sizeof(time),1000);
+				  // Update RTC:
+				  HAL_RTC_SetTime(&hrtc, &rxTime, RTC_FORMAT_BIN);
+				  HAL_RTC_SetDate(&hrtc, &rxDate, RTC_FORMAT_BIN);
 				  rxDateTimeFlag = 0;
 				  HAL_UART_Receive_DMA(&huart6, UART6_rxCommand, sizeof(UART6_rxCommand)); // Enable reception of a command
 			  }else{ // Prompt for setting:
